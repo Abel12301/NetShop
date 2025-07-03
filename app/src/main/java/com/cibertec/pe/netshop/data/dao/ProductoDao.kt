@@ -27,4 +27,9 @@ interface ProductoDao {
 
     @Query("SELECT * FROM productos")
     suspend fun obtenerTodosSuspend(): List<Producto>
+
+    // ✅ NUEVO: Actualizar solo el stock
+    @Query("UPDATE productos SET cantidadInicial = :nuevoStock WHERE id = :id")
+    suspend fun actualizarStock(id: Int, nuevoStock: Int)
 }
+

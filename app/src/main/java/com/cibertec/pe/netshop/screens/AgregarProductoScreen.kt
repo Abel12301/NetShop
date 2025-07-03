@@ -1,5 +1,4 @@
-// AgregarProductoScreen adaptado para modo oscuro/claro con MaterialTheme
-
+// AgregarProductoScreen.kt
 package com.cibertec.pe.netshop.screens
 
 import android.app.Activity
@@ -31,13 +30,18 @@ import coil.compose.rememberAsyncImagePainter
 import com.cibertec.pe.netshop.R
 import com.cibertec.pe.netshop.ScannerActivity
 import com.cibertec.pe.netshop.data.database.AppDatabase
-import com.cibertec.pe.netshop.data.entity.Producto
+import com.cibertec.pe.netshop.data.entity.*
 import com.google.zxing.integration.android.IntentIntegrator
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.io.File
 import java.io.FileOutputStream
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.ui.text.font.FontWeight
+import kotlinx.coroutines.flow.first
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -57,8 +61,8 @@ fun AgregarProductoScreen(navController: NavController, productoId: Int? = null)
     var unidadSeleccionada by remember { mutableStateOf("Unidad") }
     var categoriaSeleccionada by remember { mutableStateOf("Categoría") }
 
-    var unidades by remember { mutableStateOf(mutableListOf("Unidad", "Caja", "Paquete")) }
-    var categorias by remember { mutableStateOf(mutableListOf("Bebidas", "Comida", "Limpieza")) }
+    var unidades by remember { mutableStateOf(listOf<String>()) }
+    var categorias by remember { mutableStateOf(listOf<String>()) }
 
     var mostrarDialogoUnidad by remember { mutableStateOf(false) }
     var nuevaUnidad by remember { mutableStateOf(TextFieldValue()) }
@@ -68,6 +72,8 @@ fun AgregarProductoScreen(navController: NavController, productoId: Int? = null)
     var imagenUri by remember { mutableStateOf<Uri?>(null) }
     var mostrarImagenCompleta by remember { mutableStateOf(false) }
     var productoExistente by remember { mutableStateOf<Producto?>(null) }
+
+    val enModoEdicion = productoId != null
 
     LaunchedEffect(productoId) {
         if (productoId != null) {
@@ -88,14 +94,17 @@ fun AgregarProductoScreen(navController: NavController, productoId: Int? = null)
         }
     }
 
+    LaunchedEffect(Unit) {
+        unidades = db.unidadDao().obtenerTodos().map { it.nombre }
+        categorias = db.categoriaDao().obtenerTodos().map { it.nombre }
+    }
+
     val launcherGaleria = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         uri?.let {
-            try {
-                val inputStream = context.contentResolver.openInputStream(it)
-                val file = File(context.filesDir, "img_${System.currentTimeMillis()}.jpg")
-                FileOutputStream(file).use { out -> inputStream?.copyTo(out) }
-                imagenUri = Uri.fromFile(file)
-            } catch (e: Exception) { e.printStackTrace() }
+            val inputStream = context.contentResolver.openInputStream(it)
+            val file = File(context.filesDir, "img_${System.currentTimeMillis()}.jpg")
+            FileOutputStream(file).use { out -> inputStream?.copyTo(out) }
+            imagenUri = Uri.fromFile(file)
         }
     }
 
@@ -162,6 +171,7 @@ fun AgregarProductoScreen(navController: NavController, productoId: Int? = null)
         },
         containerColor = MaterialTheme.colorScheme.background
     ) { padding ->
+
         Column(
             modifier = Modifier
                 .padding(padding)
@@ -183,20 +193,81 @@ fun AgregarProductoScreen(navController: NavController, productoId: Int? = null)
                     .background(MaterialTheme.colorScheme.surfaceVariant)
             ) {
                 if (imagenUri != null) {
-                    Image(painter = rememberAsyncImagePainter(imagenUri), contentDescription = null, modifier = Modifier.fillMaxSize())
+                    Image(
+                        painter = rememberAsyncImagePainter(imagenUri),
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize()
+                    )
                 } else {
-                    Image(painter = painterResource(id = R.drawable.placeholder_producto), contentDescription = null, modifier = Modifier.size(100.dp).align(Alignment.Center))
+                    Image(
+                        painter = painterResource(id = R.drawable.placeholder_producto),
+                        contentDescription = null,
+                        modifier = Modifier
+                            .size(100.dp)
+                            .align(Alignment.Center)
+                    )
                 }
-                if (imagenUri != null) {
-                    IconButton(onClick = { mostrarImagenCompleta = true }, modifier = Modifier.align(Alignment.BottomStart).padding(8.dp)) {
-                        Icon(Icons.Default.Visibility, contentDescription = "Ver imagen")
+
+                // Ícono del ojo a la izquierda abajo
+                if (enModoEdicion && imagenUri != null) {
+                    IconButton(
+                        onClick = { mostrarImagenCompleta = true },
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .padding(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Visibility,
+                            contentDescription = "Ver Imagen",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
                     }
                 }
-                Row(modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp)) {
-                    IconButton({ imagenUri = null }) { Icon(Icons.Default.Close, contentDescription = "Eliminar") }
-                    IconButton({ launcherGaleria.launch("image/*") }) { Icon(Icons.Default.Image, contentDescription = "Galería") }
-                    IconButton({ launcherCamara.launch(null) }) { Icon(Icons.Default.CameraAlt, contentDescription = "Cámara") }
-                }
+
+                // Otros íconos a la derecha abajo
+                Row(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    IconButton(onClick = { imagenUri = null }) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Eliminar",
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                    }
+                    IconButton(onClick = { launcherGaleria.launch("image/*") }) {
+                        Icon(
+                            imageVector = Icons.Default.Image,
+                            contentDescription = "Galería",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    IconButton(onClick = { launcherCamara.launch(null) }) {
+                        Icon(
+                            imageVector = Icons.Default.CameraAlt,
+                            contentDescription = "Cámara",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }}
+            }
+
+            if (mostrarImagenCompleta && imagenUri != null) {
+                AlertDialog(
+                    onDismissRequest = { mostrarImagenCompleta = false },
+                    confirmButton = {},
+                    text = {
+                        Image(
+                            painter = rememberAsyncImagePainter(imagenUri),
+                            contentDescription = null,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .aspectRatio(1f)
+                        )
+                    }
+                )
             }
 
             OutlinedTextField(clave, { clave = it }, label = { Text("Clave") }, modifier = Modifier.fillMaxWidth(), trailingIcon = {
@@ -236,69 +307,279 @@ fun AgregarProductoScreen(navController: NavController, productoId: Int? = null)
         }
     }
 
-    if (mostrarImagenCompleta && imagenUri != null) {
-        AlertDialog(onDismissRequest = { mostrarImagenCompleta = false }, confirmButton = {}, text = {
-            Image(painter = rememberAsyncImagePainter(imagenUri), contentDescription = null, modifier = Modifier.fillMaxWidth().aspectRatio(1f))
-        })
-    }
+    // Estados para mostrar inputs dinámicos
+    var mostrandoInputUnidad by remember { mutableStateOf(false) }
+    var mostrandoInputCategoria by remember { mutableStateOf(false) }
+
+    val gold = Color(0xFFFFC107)
+    val backgroundDialog = Color(0xFFFDFDFD)
 
     if (mostrarDialogoUnidad) {
         AlertDialog(
-            onDismissRequest = { mostrarDialogoUnidad = false },
-            title = { Text("Seleccionar o Agregar Unidad") },
+            onDismissRequest = {
+                mostrarDialogoUnidad = false
+                mostrandoInputUnidad = false
+                nuevaUnidad = TextFieldValue("")
+            },
+            title = { Text("Seleccionar o Agregar Unidad", fontWeight = FontWeight.Bold) },
             text = {
-                Column {
-                    unidades.forEach {
-                        Text(it, modifier = Modifier.fillMaxWidth().clickable {
-                            unidadSeleccionada = it
-                            mostrarDialogoUnidad = false
-                        }.padding(8.dp))
+                Column(modifier = Modifier.fillMaxWidth()) {
+
+                    // Botón +
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Unidades disponibles", fontWeight = FontWeight.SemiBold)
+                        IconButton(onClick = {
+                            mostrandoInputUnidad = true
+                            nuevaUnidad = TextFieldValue("")
+                        }) {
+                            Icon(Icons.Default.Add, contentDescription = "Agregar", tint = gold)
+                        }
                     }
-                    OutlinedTextField(nuevaUnidad, { nuevaUnidad = it }, label = { Text("Nueva Unidad") })
+
+                    // Campo dinámico de entrada
+                    if (mostrandoInputUnidad) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            OutlinedTextField(
+                                value = nuevaUnidad,
+                                onValueChange = { nuevaUnidad = it },
+                                label = { Text("Nueva Unidad") },
+                                modifier = Modifier.weight(1f)
+                            )
+                            IconButton(onClick = {
+                                val texto = nuevaUnidad.text.trim()
+                                if (texto.isNotEmpty()) {
+                                    CoroutineScope(Dispatchers.IO).launch {
+                                        db.unidadDao().insertar(Unidad(nombre = texto))
+                                        unidades = db.unidadDao().obtenerTodos().map { it.nombre }
+                                        unidadSeleccionada = texto
+                                        nuevaUnidad = TextFieldValue("")
+                                        mostrandoInputUnidad = false
+                                        mostrarDialogoUnidad = false
+                                    }
+                                }
+                            }) {
+                                Icon(Icons.Default.Check, contentDescription = "Aceptar", tint = Color(0xFF4CAF50))
+                            }
+                            IconButton(onClick = {
+                                mostrandoInputUnidad = false
+                                nuevaUnidad = TextFieldValue("")
+                            }) {
+                                Icon(Icons.Default.Close, contentDescription = "Cancelar", tint = Color(0xFFF44336))
+                            }
+                        }
+                    }
+
+                    LazyColumn(modifier = Modifier.heightIn(max = 300.dp)) {
+                        items(unidades) { unidad ->
+                            var expanded by remember { mutableStateOf(false) }
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp, horizontal = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    unidad,
+                                    modifier = Modifier
+                                        .clickable {
+                                            unidadSeleccionada = unidad
+                                            mostrarDialogoUnidad = false
+                                        }
+                                        .weight(1f)
+                                )
+                                Box {
+                                    IconButton(onClick = { expanded = true }) {
+                                        Icon(Icons.Default.MoreVert, contentDescription = "Opciones")
+                                    }
+                                    DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                                        DropdownMenuItem(
+                                            text = { Text("Editar") },
+                                            onClick = {
+                                                nuevaUnidad = TextFieldValue(unidad)
+                                                unidades = unidades - unidad
+                                                CoroutineScope(Dispatchers.IO).launch {
+                                                    db.unidadDao().obtenerTodos().firstOrNull { it.nombre == unidad }
+                                                        ?.let { db.unidadDao().eliminar(it) }
+                                                }
+                                                mostrandoInputUnidad = true
+                                                expanded = false
+                                            }
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text("Eliminar") },
+                                            onClick = {
+                                                CoroutineScope(Dispatchers.IO).launch {
+                                                    db.unidadDao().obtenerTodos().firstOrNull { it.nombre == unidad }
+                                                        ?.let { db.unidadDao().eliminar(it) }
+                                                    unidades = db.unidadDao().obtenerTodos().map { it.nombre }
+                                                }
+                                                expanded = false
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             },
-            confirmButton = {
+            confirmButton = {},
+            dismissButton = {
                 TextButton(onClick = {
-                    val nueva = nuevaUnidad.text.trim()
-                    if (nueva.isNotEmpty()) {
-                        unidades.add(nueva)
-                        unidadSeleccionada = nueva
-                        nuevaUnidad = TextFieldValue("")
-                        mostrarDialogoUnidad = false
-                    }
-                }) { Text("Agregar") }
-            },
-            dismissButton = { TextButton(onClick = { mostrarDialogoUnidad = false }) { Text("Cancelar") } }
+                    mostrarDialogoUnidad = false
+                    mostrandoInputUnidad = false
+                    nuevaUnidad = TextFieldValue("")
+                }) {
+                    Text("Cerrar", color = Color.Gray)
+                }
+            }
         )
     }
 
     if (mostrarDialogoCategoria) {
         AlertDialog(
-            onDismissRequest = { mostrarDialogoCategoria = false },
-            title = { Text("Seleccionar o Agregar Categoría") },
+            onDismissRequest = {
+                mostrarDialogoCategoria = false
+                mostrandoInputCategoria = false
+                nuevaCategoria = TextFieldValue("")
+            },
+            title = { Text("Seleccionar o Agregar Categoría", fontWeight = FontWeight.Bold) },
             text = {
-                Column {
-                    categorias.forEach {
-                        Text(it, modifier = Modifier.fillMaxWidth().clickable {
-                            categoriaSeleccionada = it
-                            mostrarDialogoCategoria = false
-                        }.padding(8.dp))
+                Column(modifier = Modifier.fillMaxWidth()) {
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Categorías disponibles", fontWeight = FontWeight.SemiBold)
+                        IconButton(onClick = {
+                            mostrandoInputCategoria = true
+                            nuevaCategoria = TextFieldValue("")
+                        }) {
+                            Icon(Icons.Default.Add, contentDescription = "Agregar", tint = gold)
+                        }
                     }
-                    OutlinedTextField(nuevaCategoria, { nuevaCategoria = it }, label = { Text("Nueva Categoría") })
+
+                    if (mostrandoInputCategoria) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            OutlinedTextField(
+                                value = nuevaCategoria,
+                                onValueChange = { nuevaCategoria = it },
+                                label = { Text("Nueva Categoría") },
+                                modifier = Modifier.weight(1f)
+                            )
+                            IconButton(onClick = {
+                                val texto = nuevaCategoria.text.trim()
+                                if (texto.isNotEmpty()) {
+                                    CoroutineScope(Dispatchers.IO).launch {
+                                        db.categoriaDao().insertar(Categoria(nombre = texto))
+                                        categorias = db.categoriaDao().obtenerTodos().map { it.nombre }
+                                        categoriaSeleccionada = texto
+                                        nuevaCategoria = TextFieldValue("")
+                                        mostrandoInputCategoria = false
+                                        mostrarDialogoCategoria = false
+                                    }
+                                }
+                            }) {
+                                Icon(Icons.Default.Check, contentDescription = "Aceptar", tint = Color(0xFF4CAF50))
+                            }
+                            IconButton(onClick = {
+                                mostrandoInputCategoria = false
+                                nuevaCategoria = TextFieldValue("")
+                            }) {
+                                Icon(Icons.Default.Close, contentDescription = "Cancelar", tint = Color(0xFFF44336))
+                            }
+                        }
+                    }
+
+                    LazyColumn(modifier = Modifier.heightIn(max = 300.dp)) {
+                        items(categorias) { categoria ->
+                            var expanded by remember { mutableStateOf(false) }
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp, horizontal = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Text(
+                                    categoria,
+                                    modifier = Modifier
+                                        .clickable {
+                                            categoriaSeleccionada = categoria
+                                            mostrarDialogoCategoria = false
+                                        }
+                                        .weight(1f)
+                                )
+                                Box {
+                                    IconButton(onClick = { expanded = true }) {
+                                        Icon(Icons.Default.MoreVert, contentDescription = "Opciones")
+                                    }
+                                    DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                                        DropdownMenuItem(
+                                            text = { Text("Editar") },
+                                            onClick = {
+                                                nuevaCategoria = TextFieldValue(categoria)
+                                                categorias = categorias - categoria
+                                                CoroutineScope(Dispatchers.IO).launch {
+                                                    db.categoriaDao().obtenerTodos().firstOrNull { it.nombre == categoria }
+                                                        ?.let { db.categoriaDao().eliminar(it) }
+                                                }
+                                                mostrandoInputCategoria = true
+                                                expanded = false
+                                            }
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text("Eliminar") },
+                                            onClick = {
+                                                CoroutineScope(Dispatchers.IO).launch {
+                                                    db.categoriaDao().obtenerTodos().firstOrNull { it.nombre == categoria }
+                                                        ?.let { db.categoriaDao().eliminar(it) }
+                                                    categorias = db.categoriaDao().obtenerTodos().map { it.nombre }
+                                                }
+                                                expanded = false
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             },
-            confirmButton = {
+            confirmButton = {},
+            dismissButton = {
                 TextButton(onClick = {
-                    val nueva = nuevaCategoria.text.trim()
-                    if (nueva.isNotEmpty()) {
-                        categorias.add(nueva)
-                        categoriaSeleccionada = nueva
-                        nuevaCategoria = TextFieldValue("")
-                        mostrarDialogoCategoria = false
-                    }
-                }) { Text("Agregar") }
-            },
-            dismissButton = { TextButton(onClick = { mostrarDialogoCategoria = false }) { Text("Cancelar") } }
+                    mostrarDialogoCategoria = false
+                    mostrandoInputCategoria = false
+                    nuevaCategoria = TextFieldValue("")
+                }) {
+                    Text("Cerrar", color = Color.Gray)
+                }
+            }
+        )
+    }
+
+
+    if (mostrarImagenCompleta && imagenUri != null) {
+        AlertDialog(
+            onDismissRequest = { mostrarImagenCompleta = false },
+            confirmButton = {},
+            text = {
+                Image(painter = rememberAsyncImagePainter(imagenUri), contentDescription = null, modifier = Modifier.fillMaxWidth().aspectRatio(1f))
+            }
         )
     }
 }

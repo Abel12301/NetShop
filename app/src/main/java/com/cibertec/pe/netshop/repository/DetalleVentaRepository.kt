@@ -13,4 +13,7 @@ class DetalleVentaRepository(private val dao: DetalleVentaDao) {
     fun obtenerPorVentaId(ventaId: Int): Flow<List<DetalleVenta>> {
         return dao.obtenerPorVentaId(ventaId)
     }
+    suspend fun obtenerTodosLosDetalles(): List<DetalleVenta> {
+        return dao.obtenerTodosLosDetalles()
+    }
 }

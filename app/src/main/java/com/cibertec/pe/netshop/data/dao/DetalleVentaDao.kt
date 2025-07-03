@@ -31,4 +31,8 @@ interface DetalleVentaDao {
     @Transaction
     @Query("SELECT * FROM detalle_ventas WHERE ventaId = :ventaId")
     suspend fun obtenerDetalleConProducto(ventaId: Int): List<DetalleVentaConProducto>
+
+    @Query("SELECT * FROM detalle_ventas")
+    suspend fun obtenerTodosLosDetalles(): List<DetalleVenta>
+
 }

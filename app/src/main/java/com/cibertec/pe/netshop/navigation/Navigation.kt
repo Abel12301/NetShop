@@ -67,6 +67,7 @@ fun AppNavigation(navController: NavHostController) {
             val ventaId = backStackEntry.arguments?.getInt("ventaId")
             PantallaConfirmacion(navController, ventaId)
         }
+
         composable(
             "ver_pdf/{ventaId}",
             arguments = listOf(navArgument("ventaId") { type = NavType.IntType })
@@ -76,6 +77,16 @@ fun AppNavigation(navController: NavHostController) {
                 VerPdfScreen(navController = navController, ventaId = ventaId)
             }
         }
+        composable("reportes") {
+            ReportesScreen(navController)
+        }
+        composable("exportar_qr") {
+            ExportarQRScreen(
+                onBack = { navController.popBackStack() }
+            )
+        }
+
+
         composable("confirmar_venta/{productoJson}", arguments = listOf(
             navArgument("productoJson") { type = NavType.StringType }
         )) { backStackEntry ->

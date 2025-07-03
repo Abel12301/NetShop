@@ -34,6 +34,7 @@
         <!-- Actividad principal -->
         <activity
             android:name=".MainActivity"
+
             android:exported="true"
             android:label="@string/app_name"
             android:theme="@style/Theme.NetShop">
@@ -48,5 +49,6 @@
             android:name=".ScannerActivity"
             android:screenOrientation="portrait"
             android:theme="@style/Theme.AppCompat.Light.NoActionBar" />
+        <activity android:name=".QRScanActivity" />
     </application>
 </manifest>

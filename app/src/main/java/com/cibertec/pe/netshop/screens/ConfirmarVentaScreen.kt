@@ -1,6 +1,7 @@
 package com.cibertec.pe.netshop.screens
 
 import android.app.Application
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
 import androidx.compose.foundation.Image
@@ -15,6 +16,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -25,6 +27,9 @@ import com.cibertec.pe.netshop.data.entity.DetalleVenta
 import com.cibertec.pe.netshop.data.entity.Producto
 import com.cibertec.pe.netshop.data.entity.Venta
 import com.cibertec.pe.netshop.viewmodel.VentaViewModel
+import com.google.zxing.BarcodeFormat
+import com.google.zxing.MultiFormatWriter
+import com.google.zxing.common.BitMatrix
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
@@ -53,6 +58,8 @@ fun ConfirmarVentaScreen(
     var selectedClienteId by remember { mutableStateOf(clienteId ?: 0) }
     var selectedEmpleadoId by remember { mutableStateOf(empleadoId) }
     var productoDetalle by remember { mutableStateOf<Producto?>(null) }
+    val stockActual = remember { mutableStateMapOf<Int, Int>() }
+    val mostrarMensajeStock = remember { mutableStateMapOf<Int, Boolean>() }
 
     val fecha = obtenerSoloFecha()
     val hora = obtenerSoloHora()
@@ -60,11 +67,20 @@ fun ConfirmarVentaScreen(
     LaunchedEffect(Unit) {
         productosSeleccionados.forEach {
             if (it.id !in precios) precios[it.id] = it.precio
+
+            // Cargar el stock actual desde la base de datos
+            val productoDb = ventaViewModel.obtenerProductoPorIdSuspend(it.id)
+            productoDb?.let { p -> stockActual[it.id] = p.cantidadInicial }
         }
     }
 
     val total = productosSeleccionados.sumOf {
         (cantidades[it.id] ?: 0) * (precios[it.id] ?: it.precio)
+    }
+    val hayStockInsuficiente = productosSeleccionados.any { producto ->
+        val cantidad = cantidades[producto.id] ?: 0
+        val stock = stockActual[producto.id] ?: producto.cantidadInicial
+        cantidad > stock
     }
 
     Scaffold(
@@ -89,10 +105,27 @@ fun ConfirmarVentaScreen(
                     Icon(Icons.Default.Add, contentDescription = "Agregar más productos")
                 }
                 FloatingActionButton(
-                    onClick = { mostrarDialogoConfirmacion = true },
-                    containerColor = MaterialTheme.colorScheme.primary
+                    onClick = {
+                        if (!hayStockInsuficiente) {
+                            mostrarDialogoConfirmacion = true
+                        }
+                    },
+                    containerColor = if (hayStockInsuficiente) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
                 ) {
-                    Icon(Icons.Default.Check, contentDescription = "Confirmar")
+                    Icon(
+                        imageVector = Icons.Default.Check,
+                        contentDescription = "Confirmar",
+                        tint = if (hayStockInsuficiente) MaterialTheme.colorScheme.onError else MaterialTheme.colorScheme.onPrimary
+                    )
+                }
+                if (hayStockInsuficiente) {
+                    Text(
+                        text = "⚠ Stock insuficiente en uno o más productos.",
+                        color = MaterialTheme.colorScheme.error,
+                        fontSize = 12.sp,
+                        modifier = Modifier.padding(top = 4.dp, end = 12.dp)
+                    )
                 }
             }
         }
@@ -111,6 +144,7 @@ fun ConfirmarVentaScreen(
                     val cantidad = cantidades[producto.id] ?: 1
                     val precio = precios[producto.id] ?: producto.precio
                     val subtotal = cantidad * precio
+                    val stock = stockActual[producto.id] ?: producto.cantidadInicial
 
                     val imagenBitmap = remember(producto.imagenUri) {
                         producto.imagenUri?.let {
@@ -175,14 +209,27 @@ fun ConfirmarVentaScreen(
 
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 OutlinedButton(onClick = {
-                                    if (cantidad > 1) cantidades[producto.id] = cantidad - 1
-                                }) { Text("-") }
+                                    if (cantidad > 1) {
+                                        cantidades[producto.id] = cantidad - 1
+                                        val nuevoValor = cantidad - 1
+                                        if (nuevoValor <= stock) mostrarMensajeStock[producto.id] = false
+                                    }
+                                }) {
+                                    Text("-")
+                                }
 
                                 Text(cantidad.toString(), modifier = Modifier.padding(horizontal = 16.dp))
 
                                 OutlinedButton(onClick = {
-                                    cantidades[producto.id] = cantidad + 1
-                                }) { Text("+") }
+                                    if (cantidad < stock) {
+                                        cantidades[producto.id] = cantidad + 1
+                                        mostrarMensajeStock[producto.id] = false
+                                    } else {
+                                        mostrarMensajeStock[producto.id] = true
+                                    }
+                                }) {
+                                    Text("+")
+                                }
 
                                 Spacer(modifier = Modifier.width(16.dp))
 
@@ -202,11 +249,30 @@ fun ConfirmarVentaScreen(
                             }
 
                             Spacer(modifier = Modifier.height(8.dp))
-                            Text("Total: S/. %.2f".format(subtotal), fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    "Total: S/. %.2f".format(subtotal),
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+
+                                if (mostrarMensajeStock[producto.id] == true) {
+                                    Text(
+                                        "⚠ sin existencia (disponible: $stock)",
+                                        color = MaterialTheme.colorScheme.error,
+                                        fontSize = 12.sp
+                                    )
+                                }
+                            }
                         }
                     }
                 }
-            }
+            } // ← CIERRA LazyColumn correctamente
 
             Text("\uD83D\uDCB5 Total: S/. ${"%.2f".format(total)}", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = MaterialTheme.colorScheme.primary)
             Divider(color = MaterialTheme.colorScheme.outline)
@@ -245,12 +311,14 @@ fun ConfirmarVentaScreen(
 
     // Confirmación de venta
     if (mostrarDialogoConfirmacion) {
-        AlertDialog(
-            onDismissRequest = { mostrarDialogoConfirmacion = false },
-            confirmButton = {
-                TextButton(onClick = {
-                    val efectivo = montoRecibido.toDoubleOrNull() ?: 0.0
-                    if (metodoPago != "Efectivo" || efectivo >= total) {
+        if (metodoPago == "Yape") {
+            val qrText = "982296407"  // Solo el número, para que funcione en Yape real
+            val qrBitmap = generarQR(qrText)
+
+            AlertDialog(
+                onDismissRequest = { mostrarDialogoConfirmacion = false },
+                confirmButton = {
+                    TextButton(onClick = {
                         scope.launch {
                             val venta = Venta(
                                 fecha = fecha,
@@ -273,38 +341,97 @@ fun ConfirmarVentaScreen(
                             }
 
                             val ventaId = ventaViewModel.registrarVentaConDetalles(venta, detalles)
+                            ventaViewModel.actualizarStockProductos(detalles)
                             mostrarDialogoConfirmacion = false
                             montoRecibido = ""
                             navController.navigate("venta_confirmada/$ventaId")
                         }
+                    }) { Text("Confirmar") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { mostrarDialogoConfirmacion = false }) {
+                        Text("Cancelar")
                     }
-                }) { Text("Confirmar") }
-            },
-            dismissButton = {
-                TextButton(onClick = { mostrarDialogoConfirmacion = false }) { Text("Cancelar") }
-            },
-            title = { Text("Confirmar Venta") },
-            text = {
-                Column {
-                    Text("Total a pagar: S/. %.2f".format(total), fontWeight = FontWeight.Bold)
-                    if (metodoPago == "Efectivo") {
-                        Spacer(Modifier.height(8.dp))
-                        OutlinedTextField(
-                            value = montoRecibido,
-                            onValueChange = { montoRecibido = it },
-                            label = { Text("Monto recibido") },
-                            singleLine = true
-                        )
-                        val vuelto = (montoRecibido.toDoubleOrNull() ?: 0.0) - total
-                        if (vuelto >= 0) {
-                            Text("Vuelto: S/. %.2f".format(vuelto), color = MaterialTheme.colorScheme.primary)
-                        } else {
-                            Text("Monto insuficiente", color = MaterialTheme.colorScheme.error)
+                },
+                title = { Text("Paga con Yape", fontWeight = FontWeight.Bold) },
+                text = {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        qrBitmap?.let {
+                            Image(bitmap = it, contentDescription = null, modifier = Modifier.size(250.dp))
+                            Spacer(Modifier.height(8.dp))
+                            Text("N°: 982296407", fontWeight = FontWeight.SemiBold)
+                            Text("Monto: S/. ${"%.2f".format(total)}")
+                            Text("Escanea el QR con tu app Yape y presiona Confirmar", fontSize = 12.sp)
+                        } ?: Text("No se pudo generar el código QR", color = MaterialTheme.colorScheme.error)
+                    }
+                }
+            
+
+
+        )
+        } else {
+            AlertDialog(
+                onDismissRequest = { mostrarDialogoConfirmacion = false },
+                confirmButton = {
+                    TextButton(onClick = {
+                        val efectivo = montoRecibido.toDoubleOrNull() ?: 0.0
+                        if (metodoPago != "Efectivo" || efectivo >= total) {
+                            scope.launch {
+                                val venta = Venta(
+                                    fecha = fecha,
+                                    hora = hora,
+                                    metodoPago = metodoPago,
+                                    total = total,
+                                    empleadoId = selectedEmpleadoId,
+                                    clienteId = selectedClienteId
+                                )
+                                val detalles = productosSeleccionados.map {
+                                    val cantidad = cantidades[it.id] ?: 0
+                                    val precio = precios[it.id] ?: it.precio
+                                    DetalleVenta(
+                                        productoId = it.id,
+                                        cantidad = cantidad,
+                                        precioUnitario = precio,
+                                        subtotal = cantidad * precio,
+                                        ventaId = 0
+                                    )
+                                }
+
+                                val ventaId = ventaViewModel.registrarVentaConDetalles(venta, detalles)
+                                ventaViewModel.actualizarStockProductos(detalles)
+                                mostrarDialogoConfirmacion = false
+                                montoRecibido = ""
+                                navController.navigate("venta_confirmada/$ventaId")
+                            }
+                        }
+                    }) { Text("Confirmar") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { mostrarDialogoConfirmacion = false }) { Text("Cancelar") }
+                },
+                title = { Text("Confirmar Venta") },
+                text = {
+                    Column {
+                        Text("Total a pagar: S/. %.2f".format(total), fontWeight = FontWeight.Bold)
+                        if (metodoPago == "Efectivo") {
+                            Spacer(Modifier.height(8.dp))
+                            OutlinedTextField(
+                                value = montoRecibido,
+                                onValueChange = { montoRecibido = it },
+                                label = { Text("Monto recibido") },
+                                singleLine = true
+                            )
+                            val vuelto = (montoRecibido.toDoubleOrNull() ?: 0.0) - total
+                            if (vuelto >= 0) {
+                                Text("Vuelto: S/. %.2f".format(vuelto), color = MaterialTheme.colorScheme.primary)
+                            } else {
+                                Text("Monto insuficiente", color = MaterialTheme.colorScheme.error)
+                            }
                         }
                     }
                 }
-            }
-        )
+            )
+        }
     }
 
     // Detalles del producto
@@ -370,4 +497,18 @@ fun obtenerSoloFecha(): String {
 fun obtenerSoloHora(): String {
     val formato = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
     return formato.format(Date())
+}
+fun generarQR(text: String, size: Int = 512): ImageBitmap? {
+    return try {
+        val bitMatrix: BitMatrix = MultiFormatWriter().encode(text, BarcodeFormat.QR_CODE, size, size)
+        val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.RGB_565)
+        for (x in 0 until size) {
+            for (y in 0 until size) {
+                bitmap.setPixel(x, y, if (bitMatrix.get(x, y)) android.graphics.Color.BLACK else android.graphics.Color.WHITE)
+            }
+        }
+        bitmap.asImageBitmap()
+    } catch (e: Exception) {
+        null
+    }
 }

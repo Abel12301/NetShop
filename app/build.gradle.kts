@@ -52,7 +52,10 @@ dependencies {
     implementation(libs.firebase.crashlytics.buildtools)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     implementation("com.tom-roush:pdfbox-android:2.0.27.0")
-
+    implementation("androidx.compose.runtime:runtime:1.6.7")
+    implementation("com.patrykandpatrick.vico:compose:1.13.0")
+    implementation("com.patrykandpatrick.vico:core:1.13.0")
+    implementation("com.patrykandpatrick.vico:compose-m3:1.13.0") // para Material 3
 
     // Jetpack Compose
     implementation(libs.androidx.ui)
@@ -80,6 +83,7 @@ dependencies {
     // Otros
     implementation("androidx.appcompat:appcompat:1.6.1")
     implementation("com.journeyapps:zxing-android-embedded:4.3.0")
+    implementation ("com.google.zxing:core:3.5.1")
 
     // Testing
     testImplementation(libs.junit)

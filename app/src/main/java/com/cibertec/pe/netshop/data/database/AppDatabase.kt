@@ -13,10 +13,12 @@ import com.cibertec.pe.netshop.data.entity.*
         Empleado::class,
         Cliente::class,
         Proveedor::class,
-        Venta::class,              // ✅ Nueva entidad
-        DetalleVenta::class        // ✅ Nueva entidad
+        Venta::class,
+        DetalleVenta::class,
+        Categoria::class,   // ✅ Nueva entidad
+        Unidad::class       // ✅ Nueva entidad
     ],
-    version = 6,  // ✅ Aumenta la versión
+    version = 7,  // ✅ Aumentado
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -25,9 +27,10 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun empleadoDao(): EmpleadoDao
     abstract fun clienteDao(): ClienteDao
     abstract fun proveedorDao(): ProveedorDao
-
-    abstract fun ventaDao(): VentaDao               // ✅ Nuevo DAO
-    abstract fun detalleVentaDao(): DetalleVentaDao // ✅ Nuevo DAO
+    abstract fun ventaDao(): VentaDao
+    abstract fun detalleVentaDao(): DetalleVentaDao
+    abstract fun categoriaDao(): CategoriaDao       // ✅ Nuevo DAO
+    abstract fun unidadDao(): UnidadDao             // ✅ Nuevo DAO
 
     companion object {
         @Volatile private var instancia: AppDatabase? = null
@@ -38,7 +41,7 @@ abstract class AppDatabase : RoomDatabase() {
                     context.applicationContext,
                     AppDatabase::class.java,
                     "productos_db"
-                ).fallbackToDestructiveMigration() // Limpia y crea si hay conflicto de versión
+                ).fallbackToDestructiveMigration()
                     .build().also { instancia = it }
             }
         }

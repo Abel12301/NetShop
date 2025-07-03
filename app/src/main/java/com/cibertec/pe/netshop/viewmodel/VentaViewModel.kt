@@ -8,6 +8,7 @@ import com.cibertec.pe.netshop.data.database.AppDatabase
 import com.cibertec.pe.netshop.data.entity.DetalleParaPdf
 import com.cibertec.pe.netshop.data.entity.DetalleVenta
 import com.cibertec.pe.netshop.data.entity.Producto
+import com.cibertec.pe.netshop.data.entity.ProductoReporte
 import com.cibertec.pe.netshop.data.entity.Venta
 import com.cibertec.pe.netshop.utils.PdfGenerator
 import kotlinx.coroutines.flow.Flow
@@ -45,7 +46,23 @@ class VentaViewModel(application: Application) : AndroidViewModel(application) {
     suspend fun obtenerVentaPorIdSuspend(id: Int): Venta? {
         return ventaDao.obtenerPorId(id)
     }
+    suspend fun obtenerTodosLosDetalles(): List<DetalleVenta> {
+        return detalleDao.obtenerTodosLosDetalles() // esta función la agregaremos en el DAO
+    }
 
+    suspend fun obtenerResumenVentasPorProducto(): List<ProductoReporte> {
+        val detalles = obtenerTodosLosDetalles()
+        val productos = productosDisponibles
+
+        return detalles.groupBy { it.productoId }.mapNotNull { (productoId, lista) ->
+            val producto = productos.find { it.id == productoId }
+            producto?.let {
+                val cantidad = lista.sumOf { it.cantidad }
+                val total = lista.sumOf { it.subtotal }
+                ProductoReporte(it.nombre, cantidad, total)
+            }
+        }
+    }
     fun actualizarVentaConDetalles(venta: Venta, nuevosDetalles: List<DetalleVenta>) {
         viewModelScope.launch {
             ventaDao.actualizar(venta)
@@ -71,6 +88,20 @@ class VentaViewModel(application: Application) : AndroidViewModel(application) {
             )
         }
     }
+    fun actualizarStockProductos(detalles: List<DetalleVenta>) {
+        viewModelScope.launch {
+            detalles.forEach { detalle ->
+                val producto = productoDao.obtenerPorId(detalle.productoId)
+                if (producto != null) {
+                    val nuevoStock = producto.cantidadInicial - detalle.cantidad
+                    productoDao.actualizarStock(detalle.productoId, nuevoStock)
+                }
+            }
+        }
+    }
+    suspend fun obtenerProductoPorIdSuspend(id: Int): Producto? {
+        return productoDao.obtenerPorId(id)
+    }
 
     suspend fun registrarVentaConDetalles(venta: Venta, detalles: List<DetalleVenta>): Int {
         val ventaId = ventaDao.insertar(venta).toInt()
@@ -80,6 +111,7 @@ class VentaViewModel(application: Application) : AndroidViewModel(application) {
         }
         return ventaId
     }
+
     fun generarPdfVenta(context: Application, ventaId: Int, onPdfGenerado: (File?) -> Unit) {
         viewModelScope.launch {
             val venta = ventaDao.obtenerPorId(ventaId)
