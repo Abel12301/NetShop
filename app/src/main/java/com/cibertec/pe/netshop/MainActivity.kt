@@ -83,7 +83,7 @@ class MainActivity : ComponentActivity() {
                                 )
                                 Spacer(modifier = Modifier.height(8.dp))
                                 Text(
-                                    text = "Mi Negocio Plus",
+                                    text = "Net Shop",
                                     fontSize = 20.sp,
                                     color = Color.White,
                                     fontWeight = FontWeight.Bold,
